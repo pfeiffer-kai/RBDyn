@@ -30,6 +30,8 @@ namespace rbd
 
 MultiBodyConfig::MultiBodyConfig(const MultiBody& mb):
 	q(mb.nrJoints()),
+	qPrev(mb.nrJoints()),
+	qPPrev(mb.nrJoints()),
 	alpha(mb.nrJoints()),
 	alphaD(mb.nrJoints()),
 	force(mb.nrBodies()),
@@ -47,6 +49,8 @@ MultiBodyConfig::MultiBodyConfig(const MultiBody& mb):
 	for(int i = 0; i < static_cast<int>(q.size()); ++i)
 	{
 		q[i].resize(mb.joint(i).params());
+		qPrev[i].resize(mb.joint(i).params());
+		qPPrev[i].resize(mb.joint(i).params());
 		alpha[i].resize(mb.joint(i).dof());
 		alphaD[i].resize(mb.joint(i).dof());
 
@@ -61,6 +65,8 @@ void MultiBodyConfig::zero(const MultiBody& mb)
 	for(int i = 0; i < static_cast<int>(q.size()); ++i)
 	{
 		q[i] = mb.joint(i).zeroParam();
+		qPrev[i] = mb.joint(i).zeroParam();
+		qPPrev[i] = mb.joint(i).zeroParam();
 		alpha[i] = mb.joint(i).zeroDof();
 		alphaD[i] = mb.joint(i).zeroDof();
 

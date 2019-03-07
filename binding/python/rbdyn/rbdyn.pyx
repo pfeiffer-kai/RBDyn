@@ -171,9 +171,9 @@ cdef class Body(object):
       raise NotImplementedError("This comparison is not supported")
 
   def __str__(self):
-    return c_rbdyn_private.BodyToString(self.impl).decode('utf-8')
+    return c_rbdyn_private.BodyToString(self.impl)
   def __repr__(self):
-    return self.__str__()
+    return c_rbdyn_private.BodyToString(self.impl)
 
   @staticmethod
   def pickle(b):
@@ -274,9 +274,9 @@ cdef class Joint(object):
       raise NotImplementedError("This comparison is not supported")
 
   def __str__(self):
-    return c_rbdyn_private.JointToString(self.impl).decode('utf-8')
+    return c_rbdyn_private.JointToString(self.impl)
   def __repr__(self):
-    return self.__str__()
+    return c_rbdyn_private.JointToString(self.impl)
 
   @staticmethod
   def ZeroParam(int jt):
@@ -912,8 +912,6 @@ cdef class InverseDynamics(object):
       raise TypeError("Invalid arguments passed to InverseDynamics ctor")
   def inverseDynamics(self, MultiBody mb, MultiBodyConfig mbc):
     self.impl.sInverseDynamics(deref(mb.impl), deref(mbc.impl))
-  def inverseDynamicsNoInertia(self, MultiBody mb, MultiBodyConfig mbc):
-    self.impl.sInverseDynamicsNoInertia(deref(mb.impl), deref(mbc.impl))
   def f(self):
     cdef vector[c_sva.ForceVecd] fvv = self.impl.f()
     ret = []
@@ -958,14 +956,6 @@ cdef class ForwardDynamics(object):
     for rbi in rbiv:
       ret.append(sva.RBInertiadFromC(rbi))
     return ret
-
-cdef class Coriolis(object):
-  def __dealloc__(self):
-    del self.impl
-  def __cinit__(self, MultiBody mb):
-    self.impl = new c_rbdyn.Coriolis(deref(mb.impl))
-  def coriolis(self, MultiBody mb, MultiBodyConfig mbc):
-    return eigen.MatrixXdFromC(self.impl.coriolis(deref(mb.impl), deref(mbc.impl)))
 
 def computeCoM(MultiBody mb, MultiBodyConfig mbc):
   return eigen.Vector3dFromC(c_rbdyn.sComputeCoM(deref(mb.impl), deref(mbc.impl)))

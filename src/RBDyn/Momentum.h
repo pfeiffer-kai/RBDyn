@@ -30,8 +30,6 @@ namespace rbd
 {
 class MultiBody;
 struct MultiBodyConfig;
-struct Block;
-using Blocks = std::vector<Block>;
 class Jacobian;
 
 
@@ -199,8 +197,9 @@ private:
 	Eigen::MatrixXd cmMat_;
 	Eigen::MatrixXd cmMatDot_;
 
+	Eigen::MatrixXd jacFull_;
+
 	std::vector<Jacobian> jacVec_;
-	std::vector<Blocks> blocksVec_;
 	std::vector<Eigen::MatrixXd> jacWork_;
 	std::vector<double> bodiesWeight_;
 	std::vector<sva::MotionVecd> normalAcc_;

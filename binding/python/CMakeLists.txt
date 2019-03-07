@@ -15,42 +15,36 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with RBDyn.  If not, see <http://www.gnu.org/licenses/>.
 
-SET(SETUP_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/")
-IF(DEFINED CMAKE_BUILD_TYPE)
-  FILE(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}")
-ELSE()
-  FOREACH(CFG ${CMAKE_CONFIGURATION_TYPES})
-    FILE(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${CFG}")
-  ENDFOREACH()
-ENDIF()
-CONFIGURE_FILE("${CMAKE_CURRENT_SOURCE_DIR}/setup.in.py" "${CMAKE_CURRENT_BINARY_DIR}/setup.in.py")
-FILE(GENERATE
-      OUTPUT "${SETUP_LOCATION}/setup.py"
-      INPUT "${CMAKE_CURRENT_BINARY_DIR}/setup.in.py")
-
-SET(PYTHON "python")
-SET(PIP "pip")
-IF(${PYTHON_BINDING_FORCE_PYTHON3})
-  SET(PYTHON "python3")
-  SET(PIP "pip3")
-ENDIF()
+MACRO(GET_RBDYN_PROPERTY PROPERTY)
+  GET_TARGET_PROPERTY(RBDYN_${PROPERTY} RBDyn ${PROPERTY})
+  IF(NOT RBDYN_${PROPERTY})
+    SET(RBDYN_${PROPERTY} "")
+  ENDIF()
+ENDMACRO()
+GET_RBDYN_PROPERTY(COMPILE_FLAGS)
+GET_RBDYN_PROPERTY(INCLUDE_DIRECTORIES)
+GET_RBDYN_PROPERTY(LINK_FLAGS)
+GET_RBDYN_PROPERTY(LINK_LIBRARIES)
+GET_RBDYN_PROPERTY(LOCATION)
+CONFIGURE_FILE(setup.in.py ${CMAKE_CURRENT_SOURCE_DIR}/setup.py)
+GET_FILENAME_COMPONENT(RBDYN_LOCATION_DIRECTORY ${RBDYN_LOCATION} DIRECTORY)
 
 # Build the bindings locally at build time for test purposes
 ADD_CUSTOM_TARGET(rbdyn-python-bindings ALL
-  COMMAND ${CMAKE_COMMAND} -E chdir "${SETUP_LOCATION}" ${PYTHON} setup.py build_ext --inplace
+  COMMAND python setup.py build_ext --inplace
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   COMMENT "Generating local RBDyn Python bindings"
-  DEPENDS "include/rbdyn_wrapper.hpp" "rbdyn/c_rbdyn.pxd" "rbdyn/rbdyn.pxd" "rbdyn/rbdyn.pyx"
-  SOURCES "include/rbdyn_wrapper.hpp" "rbdyn/c_rbdyn.pxd" "rbdyn/rbdyn.pxd" "rbdyn/rbdyn.pyx"
+  DEPENDS include/rbdyn_wrapper.hpp rbdyn/c_rbdyn.pxd rbdyn/rbdyn.pxd rbdyn/rbdyn.pyx
 )
-ADD_DEPENDENCIES(rbdyn-python-bindings RBDyn)
 
-IF(NOT ${DISABLE_TESTS})
+if(NOT ${DISABLE_TESTS})
   IF(NOT DEFINED PYTHON_DEB_ROOT)
     ADD_TEST(NAME PythonBindingsTest
-      COMMAND ${CMAKE_COMMAND} -E chdir "$<TARGET_FILE_DIR:RBDyn>" nosetests ${SETUP_LOCATION}
+      COMMAND nosetests ${CMAKE_CURRENT_SOURCE_DIR}
+      WORKING_DIRECTORY ${RBDYN_LOCATION_DIRECTORY}
     )
   ENDIF()
-ENDIF()
+endif()
 
 SET(PIP_EXTRA_OPTIONS "")
 IF(${PYTHON_BINDING_USER_INSTALL})
@@ -59,14 +53,15 @@ ENDIF()
 # Install the bindings
 IF(DEFINED PYTHON_DEB_ROOT)
   ADD_CUSTOM_TARGET(install-rbdyn-python-bindings
-    COMMAND ${CMAKE_COMMAND} -E chdir "${SETUP_LOCATION}" python setup.py install --root=${PYTHON_DEB_ROOT} --install-layout=deb && python3 setup.py install --root=${PYTHON_DEB_ROOT} --install-layout=deb
+    COMMAND python setup.py install --root=${PYTHON_DEB_ROOT} --install-layout=deb && python3 setup.py install --root=${PYTHON_DEB_ROOT} --install-layout=deb
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMENT "Install SpaceVecAlg Python bindings (Debian package)"
   )
 ELSE()
   ADD_CUSTOM_TARGET(install-rbdyn-python-bindings
-    COMMAND ${CMAKE_COMMAND} -E chdir "${SETUP_LOCATION}" ${PIP} install . ${PIP_EXTRA_OPTIONS}
+    COMMAND pip install . ${PIP_EXTRA_OPTIONS}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMENT "Install RBDyn Python bindings"
   )
 ENDIF()
-
-INSTALL(CODE "EXECUTE_PROCESS(COMMAND \"${CMAKE_COMMAND}\" --build \"${CMAKE_BINARY_DIR}\" --config \${CMAKE_INSTALL_CONFIG_NAME} --target install-rbdyn-python-bindings)")
+INSTALL(CODE "EXECUTE_PROCESS(COMMAND ${CMAKE_MAKE_PROGRAM} install-rbdyn-python-bindings)")

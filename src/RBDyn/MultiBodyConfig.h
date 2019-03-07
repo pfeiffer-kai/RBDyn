@@ -45,6 +45,12 @@ struct RBDYN_DLLAPI MultiBodyConfig
 	/// Generalized position variable.
 	std::vector<std::vector<double>> q;
 
+	/// Generalized position variable.
+	std::vector<std::vector<double>> qPrev;
+
+	/// Generalized position variable.
+	std::vector<std::vector<double>> qPPrev;
+
 	/// Generalized speed variable.
 	std::vector<std::vector<double>> alpha;
 

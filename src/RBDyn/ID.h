@@ -50,13 +50,6 @@ public:
 		* Fill bodyAccB and jointTorque.
 		*/
 	void inverseDynamics(const MultiBody& mb, MultiBodyConfig& mbc);
-	/**
-		* Compute the inverse dynamics with the inertia parameters.
-		* @param mb MultiBody used has model.
-		* @param mbc Use force, bodyPosW, parentToSon and motionSubspace.
-		* Fill jointTorque.
-		*/
-	void inverseDynamicsNoInertia(const MultiBody& mb, MultiBodyConfig& mbc);
 
 	// safe version for python binding
 
@@ -64,10 +57,6 @@ public:
 		* @throw std::domain_error If mb don't match mbc.
 		*/
 	void sInverseDynamics(const MultiBody& mb, MultiBodyConfig& mbc);
-	/** safe version of @see inverseDynamicsNoInertia.
-		* @throw std::domain_error If mb don't match mbc.
-		*/
-	void sInverseDynamicsNoInertia(const MultiBody& mb, MultiBodyConfig& mbc);
 
 	/**
 		* @brief Get the internal forces.
@@ -75,15 +64,6 @@ public:
 		* joint i.
 		*/
 	const std::vector<sva::ForceVecd>& f() const;
-
-private:
-	/**
-		* @brief Compute joint torques.
-		* @param mb MultiBody used has model.
-		* @param mbc Use force, bodyPosW, parentToSon and motionSubspace.
-		* Fill jointTorque.
-		*/
-	void computeJointTorques(const MultiBody& mb, MultiBodyConfig& mbc);
 
 private:
 	/// @brief Internal forces.

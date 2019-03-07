@@ -170,6 +170,14 @@ public:
 		const MultiBodyConfig& mbc);
 
 	/**
+		* Compute the CoM hessian.
+		* @param mb MultiBody used has model.
+		* @param mbc Use bodyPosW and motionSubspace.
+		* @return CoM Hessian of mb with mbc configuration.
+		*/
+	const std::vector<Eigen::MatrixXd>& hessian(const MultiBody& mb, const MultiBodyConfig& mbc);
+
+	/**
 		* Compute the com velocity (with weight) (J·alpha).
 		* @param mb MultiBody used as model.
 		* @param mbc Use bodyPosW, bodyVelB.
@@ -242,7 +250,9 @@ private:
 
 private:
 	Eigen::MatrixXd jac_;
+  std::vector<Eigen::MatrixXd> jac_all;
 	Eigen::MatrixXd jacDot_;
+	std::vector<Eigen::MatrixXd> hes_;
 
 	std::vector<double> bodiesCoeff_;
 

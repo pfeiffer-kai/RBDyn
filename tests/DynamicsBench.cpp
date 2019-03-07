@@ -16,12 +16,25 @@
 // along with RBDyn.  If not, see <http://www.gnu.org/licenses/>.
 
 // includes
-// benchmark
-#include "benchmark/benchmark.h"
+// std
+#include <iostream>
+
+// boost
+#define BOOST_TEST_MODULE DynamicsBench
+#include <boost/test/unit_test.hpp>
+#include <boost/math/constants/constants.hpp>
+#include <boost/timer/timer.hpp>
+// The inclusion of boost chrono was commented in timer.hpp for boost >= 1.60.
+// Because of this, the auto-link feature does not incude the chrono library
+// anymore, what causes a link error. 
+// (see also https://svn.boost.org/trac/boost/ticket/11862)
+// We add manually the line.
+// Possible alternative: include only for specific version of boost and 
+// auto-link capable compiler
+#include <boost/chrono/chrono.hpp>
 
 // RBDyn
 #include "RBDyn/CoM.h"
-#include "RBDyn/Coriolis.h"
 #include "RBDyn/FD.h"
 #include "RBDyn/FK.h"
 #include "RBDyn/FV.h"
@@ -32,8 +45,10 @@
 // Arm
 #include "Tree30Dof.h"
 
-static void BM_FD_computeH(benchmark::State & state)
+BOOST_AUTO_TEST_CASE(FD_computeH)
 {
+	const std::size_t nrIteration = 10000;
+
 	rbd::MultiBody mb;
 	rbd::MultiBodyConfig mbc;
 	rbd::MultiBodyGraph mbg;
@@ -43,15 +58,21 @@ static void BM_FD_computeH(benchmark::State & state)
 
 	rbd::forwardKinematics(mb, mbc);
 	rbd::forwardVelocity(mb, mbc);
-	for(auto _ : state)
+	std::cout << "ForwardDynamic::computeH" << std::endl;
 	{
-		fd.computeH(mb, mbc);
+		boost::timer::auto_cpu_timer t;
+		for(std::size_t i = 0; i < nrIteration; ++i)
+		{
+			fd.computeH(mb, mbc);
+		}
 	}
+	std::cout << std::endl;
 }
-BENCHMARK(BM_FD_computeH);
 
-static void BM_FD_computeC(benchmark::State & state)
+BOOST_AUTO_TEST_CASE(FD_computeC)
 {
+	const std::size_t nrIteration = 100000;
+
 	rbd::MultiBody mb;
 	rbd::MultiBodyConfig mbc;
 	rbd::MultiBodyGraph mbg;
@@ -61,30 +82,13 @@ static void BM_FD_computeC(benchmark::State & state)
 
 	rbd::forwardKinematics(mb, mbc);
 	rbd::forwardVelocity(mb, mbc);
-	for(auto _ : state)
+	std::cout << "ForwardDynamic::computeC" << std::endl;
 	{
-		fd.computeC(mb, mbc);
+		boost::timer::auto_cpu_timer t;
+		for(std::size_t i = 0; i < nrIteration; ++i)
+		{
+			fd.computeC(mb, mbc);
+		}
 	}
+	std::cout << std::endl;
 }
-BENCHMARK(BM_FD_computeC);
-
-static void BM_Coriolis(benchmark::State & state)
-{
-	rbd::MultiBody mb;
-	rbd::MultiBodyConfig mbc;
-	rbd::MultiBodyGraph mbg;
-	std::tie(mb, mbc, mbg) = makeTree30Dof(false);
-
-	rbd::forwardKinematics(mb, mbc);
-	rbd::forwardVelocity(mb, mbc);
-
-	rbd::Coriolis coriolis(mb);
-
-	for(auto _ : state)
-	{
-		coriolis.coriolis(mb, mbc);
-	}
-}
-BENCHMARK(BM_Coriolis);
-
-BENCHMARK_MAIN()

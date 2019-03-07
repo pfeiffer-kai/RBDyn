@@ -22,6 +22,11 @@
 #include "RBDyn/MultiBody.h"
 #include "RBDyn/MultiBodyConfig.h"
 
+#include <chrono>
+#include <ctime>
+
+#include <iostream>
+
 namespace rbd
 {
 
@@ -279,6 +284,8 @@ CoMJacobian::CoMJacobian(const MultiBody& mb):
 	normalAcc_(mb.nrJoints()),
 	weight_(mb.nrBodies(), 1.)
 {
+  hes_.resize(3);
+  std::fill(hes_.begin(),hes_.end(),Eigen::MatrixXd(mb.nrDof(),mb.nrDof()));
 	init(mb);
 }
 
@@ -294,6 +301,8 @@ CoMJacobian::CoMJacobian(const MultiBody& mb, std::vector<double> weight):
 	normalAcc_(mb.nrJoints()),
 	weight_(std::move(weight))
 {
+  hes_.resize(3);
+  std::fill(hes_.begin(),hes_.end(),Eigen::MatrixXd(mb.nrDof(),mb.nrDof()));
 	if(int(weight_.size()) != mb.nrBodies())
 	{
 		std::stringstream ss;
@@ -376,6 +385,160 @@ const Eigen::MatrixXd& CoMJacobian::jacobian(const MultiBody& mb,
 	return jac_;
 }
 
+/// private implementation of the Hessian computation
+/// We use the Transform template allow Eigen3 to
+/// remove the Matrix3d from the computation.
+const std::vector<Eigen::MatrixXd>&
+CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
+{
+
+  auto start = std::chrono::high_resolution_clock::now();
+
+  bool print = false;
+  if (print)
+    std::cout<<"jac:\n"<<jac_<<std::endl;
+	for (size_t dim = 0; dim<3; dim++)
+		hes_[dim] = Eigen::MatrixXd::Zero(jac_.cols(),jac_.cols()); // since we want H and not B = JTJ + sum(H)
+
+  Eigen::Vector3d jacCol;
+  Eigen::Vector3d uxJ;
+  Eigen::Vector3d axis;
+  sva::PTransformd X_i_com;
+  sva::PTransformd X_i_0;
+  Eigen::Matrix3d R_j_0_T;
+  std::vector<int> subBodiesJ;
+  std::vector<int> subBodies;
+  
+	const std::vector<Joint>& joints = mb.joints();
+
+	int curI = 0;
+	for(int i = 0; i < mb.nrJoints(); ++i)
+	{
+    if (print)
+      std::cout<<"i: "<<i<<std::endl;
+
+		subBodies = jointsSubBodies_[i];
+    // std::cout<<"joint i "<<i<<" subBodies: ";
+    // for (int sb = 0;sb<subBodies.size();sb++)
+    //   std::cout<<subBodies[sb]<<" ";
+    // std::cout<<std::endl;
+    X_i_0 = mbc.bodyPosW[i].inv();
+
+		int curJ = 0;
+		for(std::size_t j = 0; j <= i; j++) // inner joints, columnwise
+		{
+      if (print)
+        std::cout<<"j: "<<j<<std::endl;
+
+		  subBodiesJ = jointsSubBodies_[j];
+      // std::cout<<"joint j "<<j<<" with "<<joints[j].dof()<<" dof, subBodiesJ: ";
+      // for (int sb = 0;sb<subBodiesJ.size();sb++)
+      //   std::cout<<subBodiesJ[sb]<<" ";
+      // std::cout<<std::endl;
+
+		  // sva::PTransformd X_j_0 = mbc.bodyPosW[j].inv();
+      R_j_0_T.noalias() = mbc.bodyPosW[j].rotation().transpose();
+
+      // if (std::find(subBodiesJ.begin(), subBodiesJ.end(), i) == subBodies.end()){
+      //   continue;
+      // }else{
+		  // sva::PTransformd X_j_com = bodiesCoMWorld_[j]*X_j_0;
+
+      for (int dof_j = 0; dof_j < joints[j].dof(); ++dof_j) // colwise
+      {
+        if (joints[j].type() == Joint::Prism){
+          if (curI == curJ){
+		        for (int dim = 0; dim < 3; dim++)
+		        {
+              if (mbc.motionSubspace[j].col(dof_j).tail(3)(dim) == 1)
+	 	      	    hes_[dim](curI + dof_j, curJ + dof_j) = 1; //* err[dim]; // FIXME: there is a sign switch, where does it come from?
+            }
+          }else{
+            break;
+          }
+        }
+
+        // axis = X_j_0.rotation() * mbc.motionSubspace[j].col(dof_j).head(3);
+        // axis = X_j_com.rotation() * mbc.motionSubspace[j].col(dof_j).head(3);
+        // axis = X_j_0.rotation() * mbc.motionSubspace[j].col(dof_j).head(3);
+        // axis = bodiesCoMWorld_[bJ].rotation().transpose() * mbc.motionSubspace[j].col(dof_j).head(3);
+        // axis.noalias() = mbc.bodyPosW[j].rotation().transpose() * mbc.motionSubspace[j].col(dof_j).head(3);
+        axis.noalias() = R_j_0_T * mbc.motionSubspace[j].col(dof_j).head(3);
+
+        // std::cout<<"start bI in subbodies "<<std::endl;
+		    // for (int bI : subBodies)
+        //   std::cout<<bI<<" ";
+        // std::cout<<std::endl;
+		    for (int bI : subBodies)
+		    {
+          // std::cout<<"bI: "<<bI<<" in ";
+          // for (int sb = 0;sb<subBodiesJ.size();sb++){
+          //   std::cout<<subBodiesJ[sb]<<" ";
+          // }
+          // std::cout<<std::endl;
+          bool found = false;
+          for (int sb = 0;sb<subBodiesJ.size();sb++){
+            // std::cout<<subBodiesJ[sb]<<" ";
+            if (bI == subBodiesJ[sb]){
+              subBodiesJ.erase(subBodiesJ.begin(),subBodiesJ.begin()+sb+1);
+              found = true;
+              break;
+            }
+          }
+          // std::cout<<std::endl;
+          // if (std::find(subBodiesJ.begin(), subBodiesJ.end(), bI) == subBodiesJ.end()){
+          if (!found){
+            // std::cout<<"body "<<bI<<" not on chain J"<<std::endl;
+            continue;
+          }else{
+            // std::cout<<"body "<<bI<<" on chain J"<<std::endl;
+		    	  X_i_com = bodiesCoMWorld_[bI] * X_i_0;
+		        for(int dof_i = 0; dof_i < joints[i].dof(); ++dof_i) // rowwise
+		        {
+              if (joints[i].type() == Joint::Prism)
+                continue;
+              if (dof_i > 2) // skip translational joints of root joints //FIXME
+                continue;
+
+              jacCol.noalias() = (X_i_com.linearMul(sva::MotionVecd(mbc.motionSubspace[i].col(dof_i))))* bodiesCoeff_[bI];
+              if (print)
+                std::cout<<"jacCol: "<<jacCol.transpose()<<std::endl;
+
+              uxJ.noalias() = axis.cross(jacCol);
+              if (print)
+                std::cout<<"uxJ: "<<uxJ.transpose()<<std::endl;
+
+              if (print)
+                std::cout<<"H[ "<<curI + dof_i<<", "<<curJ + dof_j<<" ]"<<std::endl;
+		          for (int dim = 0; dim < 3; dim++)
+		          {
+	 	          	hes_[dim](curI + dof_i, curJ + dof_j) += uxJ[dim]; //* err[dim]; // FIXME: there is a sign switch, where does it come from?
+                // if (index_child != index_parent) // FIXME: this should be correct but is not symmetrical
+                if (curI + dof_i != curJ + dof_j) // this is probably wrong
+	 	          	  hes_[dim](curJ + dof_j, curI + dof_i) = hes_[dim](curI + dof_i, curJ + dof_j);
+              }
+            }
+          }
+        }
+		  }
+		  curJ += joints[j].dof();
+    }
+		curI += joints[i].dof();
+	}
+
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> difference = end - start;
+  // std::cout<<"duration com hessian: "<<difference.count()<<"[s]"<<std::endl;
+
+  if (print){
+    std::cout<<"hes in RBDyn:\n";
+    std::cout<<"H[0] = \n"<<hes_[0]<<std::endl;
+    std::cout<<"H[1] = \n"<<hes_[1]<<std::endl;
+    std::cout<<"H[2] = \n"<<hes_[2]<<std::endl;
+  }
+
+	return hes_;
+}
 
 const Eigen::MatrixXd& CoMJacobian::jacobianDot(const MultiBody& mb,
 	const MultiBodyConfig& mbc)

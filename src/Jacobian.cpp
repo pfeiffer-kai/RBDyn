@@ -26,6 +26,8 @@
 // RBDyn
 #include "RBDyn/MultiBodyConfig.h"
 
+#include <iostream>
+
 namespace rbd
 {
 
@@ -52,6 +54,9 @@ Jacobian::Jacobian(const MultiBody& mb, const std::string& bodyName,
 
 	jac_.resize(6, dof);
 	jacDot_.resize(6, dof);
+	hessian_.resize(3);
+	for (size_t dim = 0; dim<3; dim++)
+		hessian_[dim] = Eigen::MatrixXd::Zero(dof,dof);
 }
 
 MultiBody Jacobian::subMultiBody(const MultiBody& mb) const
@@ -115,7 +120,6 @@ jacobian_(const MultiBody& mb, const MultiBodyConfig& mbc,
 	return jac;
 }
 
-
 const Eigen::MatrixXd& Jacobian::jacobian(const MultiBody& mb,
 	const MultiBodyConfig& mbc, const sva::PTransformd& X_0_p)
 {
@@ -129,7 +133,7 @@ Jacobian::jacobian(const MultiBody& mb, const MultiBodyConfig& mbc)
 	int N = jointsPath_.back();
 
 	// the transformation must be read {}^0E_p {}^pT_N {}^NX_0
-  Eigen::Vector3d T_0_Np((point_*mbc.bodyPosW[N]).translation());
+  Eigen::Vector3d T_0_Np((point_ * mbc.bodyPosW[N]).translation());
   return jacobian_(mb, mbc, T_0_Np, jointsPath_, jac_);
 }
 
@@ -256,6 +260,8 @@ Jacobian::jacobianDot(const MultiBody& mb, const MultiBodyConfig& mbc)
 			++curJ;
 		}
 	}
+
+  // std::cout<<"rbdyn::jacobian::jacDot:\n"<<jacDot_<<std::endl;
 
 	return jacDot_;
 }
@@ -417,108 +423,23 @@ void Jacobian::translateBodyJacobian(const Eigen::Ref<const Eigen::MatrixXd>& ja
 	}
 }
 
+
 void Jacobian::fullJacobian(const MultiBody& mb,
 	const Eigen::Ref<const Eigen::MatrixXd>& jac,
 	Eigen::MatrixXd& res) const
 {
 	res.block(0, 0, jac.rows(), mb.nrDof()).setZero();
-	addFullJacobian(mb, jac, res);
-}
-
-void Jacobian::addFullJacobian(const MultiBody& mb,
-	const Eigen::Ref<const Eigen::MatrixXd>& jac,
-	Eigen::MatrixXd& res) const
-{
 	int jacPos = 0;
 	for(std::size_t index = 0; index < jointsPath_.size(); ++index)
 	{
 		int i = jointsPath_[index];
 		int dof = mb.joint(i).dof();
-		res.block(0, mb.jointPosInDof(i), jac.rows(), dof) +=
+		res.block(0, mb.jointPosInDof(i), jac.rows(), dof) =
 			jac.block(0, jacPos, jac.rows(), dof);
 		jacPos += dof;
 	}
 }
 
-void Jacobian::addFullJacobian(const Blocks& compactPath,
-															 const Eigen::Ref<const Eigen::MatrixXd>& jac,
-															 Eigen::MatrixXd& res) const
-{
-	for(const auto & b : compactPath)
-	{
-		res.block(0, b.startDof, jac.rows(), b.length) +=
-			jac.block(0, b.startJac, jac.rows(), b.length);
-	}
-}
-
-Eigen::MatrixXd Jacobian::expand(const MultiBody& mb,
-	const Eigen::Ref<const Eigen::MatrixXd>& jac) const
-{
-	Eigen::MatrixXd res = Eigen::MatrixXd::Zero(mb.nrDof(), mb.nrDof());
-	expandAdd(mb, jac, res);
-	return res;
-}
-
-void Jacobian::expandAdd(const MultiBody& mb,
-												 const Eigen::Ref<const Eigen::MatrixXd>& jac,
-												 Eigen::MatrixXd& res) const
-{
-	assert(res.cols() == mb.nrDof() && res.rows() == mb.nrDof());
-	int rowJac = 0;
-	int colJac = 0;
-	for(int i : jointsPath_)
-	{
-		colJac = 0;
-		for(int j : jointsPath_)
-		{
-			res.block(mb.jointPosInDof(i), mb.jointPosInDof(j), mb.joint(i).dof(), mb.joint(j).dof()).noalias()
-				+= jac.block(rowJac, colJac, mb.joint(i).dof(), mb.joint(j).dof());
-			colJac += mb.joint(j).dof();
-		}
-		rowJac += mb.joint(i).dof();
-	}
-}
-
-Blocks Jacobian::compactPath(const rbd::MultiBody& mb) const
-{
-	Blocks res;
-
-	int start_block = mb.jointPosInDof(jointsPath_[0]);
-	int len_block = mb.joint(jointsPath_[0]).dof();
-
-	int startJac = 0;
-
-	for (std::size_t j = 1;  j < jointsPath_.size(); ++j)
-	{
-		int i = jointsPath_[j];
-		int start = mb.jointPosInDof(i);
-
-		if(start != start_block + len_block)
-		{
-			res.emplace_back(start_block, startJac, len_block);
-			start_block = start;
-			startJac += len_block;
-			len_block = 0;
-		}
-		len_block += mb.joint(i).dof();
-	}
-	res.emplace_back(start_block, startJac, len_block);
-	return res;
-}
-
-void Jacobian::expandAdd(const Blocks& compactPath,
-												 const Eigen::Ref<const Eigen::MatrixXd>& jacMat,
-												 Eigen::MatrixXd& res) const
-{
-	for(const auto& b1 : compactPath)
-	{
-		for(const auto& b2 : compactPath)
-		{
-			res.block(b1.startDof, b2.startDof, b1.length, b2.length).noalias()
-				+= jacMat.block(b1.startJac, b2.startJac, b1.length, b2.length);
-		}
-	}
-}
 
 
 const Eigen::MatrixXd& Jacobian::sJacobian(
