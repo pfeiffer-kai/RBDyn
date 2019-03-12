@@ -255,6 +255,7 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
     std::cout<<"H[4] = \n"<<hes_[4]<<std::endl;
     std::cout<<"H[5] = \n"<<hes_[5]<<std::endl;
   }
+  // std::cout<<"hes sum:\n"<<hes_[0]+hes_[1]+hes_[2]+hes_[3]+hes_[4]+hes_[5]<<std::endl;
 
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> difference = end - start;

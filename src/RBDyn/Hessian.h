@@ -89,6 +89,12 @@ public:
 		return static_cast<int>(hes_[0].cols());
 	}
 
+	/// @param point Static translation in the body exprimed in body coordinate.
+	void point(const Eigen::Vector3d& point)
+	{
+		point_ = sva::PTransformd(point);
+	}
+
 private:
 	std::vector<int> jointsPath_;
 	sva::PTransformd point_;
