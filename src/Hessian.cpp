@@ -122,122 +122,96 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
   
 	const std::vector<Joint>& joints = mb.joints();
 
-	int curChild = 0;
-	for(std::size_t index_child = 0; index_child < jointsPath.size(); index_child++) // outer joints, rowwise
+	int curParent = 0;
+	for(std::size_t indexParent = 0; indexParent < jointsPath.size(); indexParent++) // outer joints, rowwise
 	{
     if (print)
-      std::cout<<"index_child: "<<index_child<<std::endl;
-		int i = jointsPath[index_child];
+      std::cout<<"indexParent: "<<indexParent<<std::endl;
+		int i = jointsPath[indexParent];
         std::cout<<"joints[i].type(): "<<joints[i].type()<<std::endl;
 
-		int curParent = 0;
-		// for(std::size_t index_parent = 0;index_parent < jointsPath.size();index_parent++) // inner joints
-		for(std::size_t index_parent = 0; index_parent <= index_child; index_parent++) // inner joints, columnwise
-		{
-      if (print)
-        std::cout<<"index_parent: "<<index_parent<<std::endl;
-
-		  int j = jointsPath[index_parent];
-
-      // if (joints[j].dof() > 1){
-      //   curParent += joints[j].dof();
-      //   continue;
-      // }
-      // if (joints[i].dof() > 1){
-      //   continue;
-      // }
-
-      for (int dof_j = 0; dof_j < joints[j].dof(); ++dof_j) // colwise
+    for (int dof_i = 0; dof_i < joints[i].dof(); ++dof_i) // colwise
+    {
+      if (joints[i].type() == Joint::Rev)
       {
-        if (joints[j].type() == Joint::Rev)
-        {
-          axis = mbc.bodyPosW[j].rotation().transpose() * mbc.motionSubspace[j].col(dof_j).head(3);
-          axis_w = mbc.bodyPosW[j].rotation().transpose() * mbc.motionSubspace[j].col(dof_j).head(3);
+        axis = mbc.bodyPosW[i].rotation().transpose() * mbc.motionSubspace[i].col(dof_i).head(3);
+        axis_w = mbc.bodyPosW[i].rotation().transpose() * mbc.motionSubspace[i].col(dof_i).head(3);
+      }
+      else if (joints[i].type() == Joint::Prism)
+      {
+        // we don't need an axis, we just put a 1 on the diagonal and skip the rest
+        std::cout<<"joint type prism"<<std::endl;
+        for (int dim=0;dim<6;dim++)
+          hes_[dim](curParent + dof_i, curParent + dof_i) = 1; //err[0];
+        continue;
+      }
+      else if (joints[i].type() == Joint::Free)
+      {
+        if (print){
+          std::cout<<"untransformed axis: "<<mbc.motionSubspace[i].col(dof_i).head(3).transpose()<<std::endl;
+          std::cout<<"untransformed axis_w: "<<mbc.motionSubspace[i].col(dof_i).head(3).transpose()<<std::endl;
         }
-        else if (joints[j].type() == Joint::Prism)
+        switch (dof_i) // according to xyz-Euler convention of RBDYN
         {
-          std::cout<<"joint type prism"<<std::endl;
-          for (int dim=0;dim<6;dim++)
-            hes_[dim](curParent + dof_j, curParent + dof_j) = 1; //err[0];
-          continue;
-          // if (curChild == curParent){
-		      //   for (int dim = 0; dim < 3; dim++)
-		      //   {
-          //     if (mbc.motionSubspace[j].col(dof_j).tail(3)(dim) == 1)
-	 	      // 	    hes_[dim](curChild + dof_j, curParent + dof_j) = 1;
-          //   }
-          // }else{
-          //   break;
-          // }
-          // we don't need an axis, we just put a 1 on the diagonal
-        }
-        else if (joints[j].type() == Joint::Free)
-        {
-          if (print){
-            std::cout<<"untransformed axis: "<<mbc.motionSubspace[j].col(dof_j).head(3).transpose()<<std::endl;
-            std::cout<<"untransformed axis_w: "<<mbc.motionSubspace[j].col(dof_j).head(3).transpose()<<std::endl;
+          case 0:{
+            axis = mbc.bodyPosW[i].rotation().transpose() * mbc.motionSubspace[i].col(dof_i).head(3);
+            axis_w = mbc.bodyPosW[i].rotation().transpose() * mbc.motionSubspace[i].col(dof_i).head(3);
+            break;
           }
-          switch (dof_j) // according to xyz-Euler convention of RBDYN
-          {
-            case 0:{
-              axis = mbc.bodyPosW[j].rotation().transpose() * mbc.motionSubspace[j].col(dof_j).head(3);
-              axis_w = mbc.bodyPosW[j].rotation().transpose() * mbc.motionSubspace[j].col(dof_j).head(3);
-              break;
-            }
-            case 1:{
-              axis =
-                mbc.bodyPosW[j].rotation().transpose() * sva::RotX(mbc.q[j][1]) * mbc.motionSubspace[j].col(dof_j).head(3);
-              axis_w =
-                mbc.bodyPosW[j].rotation().transpose() * sva::RotX(mbc.q[j][1]) * mbc.motionSubspace[j].col(dof_j).head(3);
-              break;
-            }
-            case 2:{
-              axis =
-                mbc.bodyPosW[j].rotation().transpose() * sva::RotX(mbc.q[j][1]) * sva::RotY(mbc.q[j][2]) * mbc.motionSubspace[j].col(dof_j).head(3);
-              axis_w =
-                mbc.bodyPosW[j].rotation().transpose() * sva::RotX(mbc.q[j][1]) * sva::RotY(mbc.q[j][2]) * mbc.motionSubspace[j].col(dof_j).head(3);
-              break;
-            }
-            case 3:{
-              for (int dim=0;dim<6;dim++)
-                hes_[dim](curParent + dof_j, curParent + dof_j) = 1; //err[0];
-            }
-            case 4:{
-              for (int dim=0;dim<6;dim++)
-                hes_[dim](curParent + dof_j, curParent + dof_j) = 1; //err[0];
-            }
-            case 5:{
-              for (int dim=0;dim<6;dim++)
-                hes_[dim](curParent + dof_j, curParent + dof_j) = 1; //err[0];
-              continue;
-            }
+          case 1:{
+            axis =
+              mbc.bodyPosW[i].rotation().transpose() * sva::RotX(mbc.q[i][1]) * mbc.motionSubspace[i].col(dof_i).head(3);
+            axis_w =
+              mbc.bodyPosW[i].rotation().transpose() * sva::RotX(mbc.q[i][1]) * mbc.motionSubspace[i].col(dof_i).head(3);
+            break;
           }
-          // translational joints are handled below
-          if (print)
-          {
-            std::cout<<"transformed axis: "<<axis.transpose()<<std::endl;
-            std::cout<<"transformed axis_w: "<<axis_w.transpose()<<std::endl;
+          case 2:{
+            axis =
+              mbc.bodyPosW[i].rotation().transpose() * sva::RotX(mbc.q[i][1]) * sva::RotY(mbc.q[i][2]) * mbc.motionSubspace[i].col(dof_i).head(3);
+            axis_w =
+              mbc.bodyPosW[i].rotation().transpose() * sva::RotX(mbc.q[i][1]) * sva::RotY(mbc.q[i][2]) * mbc.motionSubspace[i].col(dof_i).head(3);
+            break;
+          }
+          case 3:{
+            for (int dim=0;dim<6;dim++)
+              hes_[dim](curParent + dof_i, curParent + dof_i) = 1; //err[0];
+          }
+          case 4:{
+            for (int dim=0;dim<6;dim++)
+              hes_[dim](curParent + dof_i, curParent + dof_i) = 1; //err[0];
+          }
+          case 5:{
+            for (int dim=0;dim<6;dim++)
+              hes_[dim](curParent + dof_i, curParent + dof_i) = 1; //err[0];
+            continue;
           }
         }
-        else { // skip translational joints of root joints //FIXME
-          // FIXME: not handled
-          // fill translational DoF's with 1's, but only dim=0, since B += sum_dim(H)
-          // hes_[0](curParent + dof_j, curParent + dof_j) = 1; //err[0];
-          // hes_[1](curParent + dof_j, curParent + dof_j) = 1; //err[1];
-          // hes_[2](curParent + dof_j, curParent + dof_j) = 1; //err[2];
-          // hes_[3](curParent + dof_j, curParent + dof_j) = 1; //err[0];
-          // hes_[4](curParent + dof_j, curParent + dof_j) = 1; //err[1];
-          // hes_[5](curParent + dof_j, curParent + dof_j) = 1; //err[2];
-          // continue;
+        if (print)
+        {
+          std::cout<<"transformed axis: "<<axis.transpose()<<std::endl;
+          std::cout<<"transformed axis_w: "<<axis_w.transpose()<<std::endl;
         }
+      }
+      else {
+        // FIXME: not handled
+      }
 
-		    for(int dof_i = 0; dof_i < joints[i].dof(); ++dof_i) // rowwise
+		  int curChild = 0;
+		  // for(std::size_t index_parent = 0;index_parent < jointsPath.size();index_parent++) // inner joints
+		  for(std::size_t indexChild = 0; indexChild <= indexParent; indexChild++) // inner joints, columnwise
+		  {
+        if (print)
+          std::cout<<"indexChild: "<<indexChild<<std::endl;
+
+		    int j = jointsPath[indexChild];
+
+		    for(int dof_j = 0; dof_j < joints[j].dof(); ++dof_j) // rowwise
 		    {
-          if (dof_i > 2) // skip translational joints of root joints //FIXME
+          if (dof_j > 2) // skip translational joints of root joints //FIXME
             continue;
 
-          jacCol_w = jac.col(curChild+dof_i).head(3);
-          jacCol = jac.col(curChild+dof_i).tail(3);
+          jacCol_w = jac.col(curChild+dof_j).head(3);
+          jacCol = jac.col(curChild+dof_j).tail(3);
           if (print){
             std::cout<<"jacCol: "<<jacCol.transpose()<<std::endl;
             std::cout<<"jacCol_w: "<<jacCol_w.transpose()<<std::endl;
@@ -254,23 +228,23 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
             std::cout<<"H[ "<<curChild + dof_i<<", "<<curParent + dof_j<<" ]"<<std::endl;
 		      for (int dim = 0; dim < 3; dim++)
 		      {
-	 	      	hes_[dim](curChild + dof_i, curParent + dof_j) += uxJ_w[dim]; //* err[dim]; // FIXME: there is a sign switch, where does it come from?
+	 	      	hes_[dim](curParent + dof_i, curChild + dof_j) += uxJ_w[dim]; //* err[dim]; // FIXME: there is a sign switch, where does it come from?
             // if (index_child != index_parent) // FIXME: this should be correct but is not symmetrical
-            if (curChild + dof_i != curParent + dof_j) // this is probably wrong
-	 	      	  hes_[dim](curParent + dof_j, curChild + dof_i) = hes_[dim](curChild + dof_i, curParent + dof_j);
+            if (curParent + dof_i != curChild + dof_j) // this is probably wrong
+	 	      	  hes_[dim](curChild + dof_j, curParent + dof_i) = hes_[dim](curParent + dof_i, curChild + dof_j);
           }
           for (int dim = 3; dim < 6; dim++)
 		      {
-	 	      	hes_[dim](curChild + dof_i, curParent + dof_j) += uxJ[dim-3]; //* err[dim]; // FIXME: there is a sign switch, where does it come from?
+	 	      	hes_[dim](curParent + dof_i, curChild + dof_j) += uxJ[dim-3]; //* err[dim]; // FIXME: there is a sign switch, where does it come from?
             // if (index_child != index_parent) // FIXME: this should be correct but is not symmetrical
-            if (curChild + dof_i != curParent + dof_j) // this is probably wrong
-	 	      	  hes_[dim](curParent + dof_j, curChild + dof_i) = hes_[dim](curChild + dof_i, curParent + dof_j);
+            if (curParent + dof_i != curChild + dof_j) // this is probably wrong
+	 	      	  hes_[dim](curChild + dof_j, curParent + dof_i) = hes_[dim](curParent + dof_i, curChild + dof_j);
           }
         }
+		    curChild += joints[j].dof();
 		  }
-		  curParent += joints[j].dof();
     }
-		curChild += joints[i].dof();
+		curParent += joints[i].dof();
 	}
 
   // if (print){
