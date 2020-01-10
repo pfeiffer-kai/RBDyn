@@ -128,6 +128,7 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
     if (print)
       std::cout<<"index_child: "<<index_child<<std::endl;
 		int i = jointsPath[index_child];
+        std::cout<<"joints[i].type(): "<<joints[i].type()<<std::endl;
 
 		int curParent = 0;
 		// for(std::size_t index_parent = 0;index_parent < jointsPath.size();index_parent++) // inner joints
@@ -138,28 +139,39 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
 
 		  int j = jointsPath[index_parent];
 
-      if (joints[j].dof() > 1){
-        curParent += joints[j].dof();
-        continue;
-      }
-      if (joints[i].dof() > 1){
-        continue;
-      }
+      // if (joints[j].dof() > 1){
+      //   curParent += joints[j].dof();
+      //   continue;
+      // }
+      // if (joints[i].dof() > 1){
+      //   continue;
+      // }
 
       for (int dof_j = 0; dof_j < joints[j].dof(); ++dof_j) // colwise
       {
-        if (joints[j].type() == Joint::Prism){
-          if (curChild == curParent){
-		        for (int dim = 0; dim < 3; dim++)
-		        {
-              if (mbc.motionSubspace[j].col(dof_j).tail(3)(dim) == 1)
-	 	      	    hes_[dim](curChild + dof_j, curParent + dof_j) = 1;
-            }
-          }else{
-            break;
-          }
+        if (joints[j].type() == Joint::Rev)
+        {
+          axis = mbc.bodyPosW[j].rotation().transpose() * mbc.motionSubspace[j].col(dof_j).head(3);
+          axis_w = mbc.bodyPosW[j].rotation().transpose() * mbc.motionSubspace[j].col(dof_j).head(3);
         }
-        if (dof_j <= 2)
+        else if (joints[j].type() == Joint::Prism)
+        {
+          std::cout<<"joint type prism"<<std::endl;
+          for (int dim=0;dim<6;dim++)
+            hes_[dim](curParent + dof_j, curParent + dof_j) = 1; //err[0];
+          continue;
+          // if (curChild == curParent){
+		      //   for (int dim = 0; dim < 3; dim++)
+		      //   {
+          //     if (mbc.motionSubspace[j].col(dof_j).tail(3)(dim) == 1)
+	 	      // 	    hes_[dim](curChild + dof_j, curParent + dof_j) = 1;
+          //   }
+          // }else{
+          //   break;
+          // }
+          // we don't need an axis, we just put a 1 on the diagonal
+        }
+        else if (joints[j].type() == Joint::Free)
         {
           if (print){
             std::cout<<"untransformed axis: "<<mbc.motionSubspace[j].col(dof_j).head(3).transpose()<<std::endl;
@@ -186,39 +198,53 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
                 mbc.bodyPosW[j].rotation().transpose() * sva::RotX(mbc.q[j][1]) * sva::RotY(mbc.q[j][2]) * mbc.motionSubspace[j].col(dof_j).head(3);
               break;
             }
+            case 3:{
+              for (int dim=0;dim<6;dim++)
+                hes_[dim](curParent + dof_j, curParent + dof_j) = 1; //err[0];
+            }
+            case 4:{
+              for (int dim=0;dim<6;dim++)
+                hes_[dim](curParent + dof_j, curParent + dof_j) = 1; //err[0];
+            }
+            case 5:{
+              for (int dim=0;dim<6;dim++)
+                hes_[dim](curParent + dof_j, curParent + dof_j) = 1; //err[0];
+              continue;
+            }
           }
-          if (print){
+          // translational joints are handled below
+          if (print)
+          {
             std::cout<<"transformed axis: "<<axis.transpose()<<std::endl;
             std::cout<<"transformed axis_w: "<<axis_w.transpose()<<std::endl;
           }
         }
         else { // skip translational joints of root joints //FIXME
+          // FIXME: not handled
           // fill translational DoF's with 1's, but only dim=0, since B += sum_dim(H)
-          hes_[0](curParent + dof_j, curParent + dof_j) = 1; //err[0];
-          hes_[1](curParent + dof_j, curParent + dof_j) = 1; //err[1];
-          hes_[2](curParent + dof_j, curParent + dof_j) = 1; //err[2];
-          hes_[3](curParent + dof_j, curParent + dof_j) = 1; //err[0];
-          hes_[4](curParent + dof_j, curParent + dof_j) = 1; //err[1];
-          hes_[5](curParent + dof_j, curParent + dof_j) = 1; //err[2];
-          continue;
+          // hes_[0](curParent + dof_j, curParent + dof_j) = 1; //err[0];
+          // hes_[1](curParent + dof_j, curParent + dof_j) = 1; //err[1];
+          // hes_[2](curParent + dof_j, curParent + dof_j) = 1; //err[2];
+          // hes_[3](curParent + dof_j, curParent + dof_j) = 1; //err[0];
+          // hes_[4](curParent + dof_j, curParent + dof_j) = 1; //err[1];
+          // hes_[5](curParent + dof_j, curParent + dof_j) = 1; //err[2];
+          // continue;
         }
 
 		    for(int dof_i = 0; dof_i < joints[i].dof(); ++dof_i) // rowwise
 		    {
-          if (joints[i].type() == Joint::Prism)
-            continue;
           if (dof_i > 2) // skip translational joints of root joints //FIXME
             continue;
 
-          jacCol = jac.col(curChild+dof_i).tail(3);
           jacCol_w = jac.col(curChild+dof_i).head(3);
+          jacCol = jac.col(curChild+dof_i).tail(3);
           if (print){
             std::cout<<"jacCol: "<<jacCol.transpose()<<std::endl;
             std::cout<<"jacCol_w: "<<jacCol_w.transpose()<<std::endl;
           }
 
-          uxJ = axis.cross(jacCol);
           uxJ_w = axis_w.cross(jacCol_w);
+          uxJ = axis.cross(jacCol);
           if (print){
             std::cout<<"uxJ: "<<uxJ.transpose()<<std::endl;
             std::cout<<"uxJ_w: "<<uxJ_w.transpose()<<std::endl;
@@ -247,7 +273,7 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
 		curChild += joints[i].dof();
 	}
 
-  if (print){
+  // if (print){
     std::cout<<"hes in RBDyn:\n";
     std::cout<<"H[0] = \n"<<hes_[0]<<std::endl;
     std::cout<<"H[1] = \n"<<hes_[1]<<std::endl;
@@ -255,7 +281,7 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
     std::cout<<"H[3] = \n"<<hes_[3]<<std::endl;
     std::cout<<"H[4] = \n"<<hes_[4]<<std::endl;
     std::cout<<"H[5] = \n"<<hes_[5]<<std::endl;
-  }
+  // }
   // std::cout<<"hes sum:\n"<<hes_[0]+hes_[1]+hes_[2]+hes_[3]+hes_[4]+hes_[5]<<std::endl;
 
   auto end = std::chrono::high_resolution_clock::now();
