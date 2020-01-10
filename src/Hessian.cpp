@@ -102,6 +102,7 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
 	const Transform& Trans_0_p, const std::vector<int>& jointsPath,
 	const Eigen::MatrixXd& jac, const Eigen::Vector3d& err, std::vector<Eigen::MatrixXd> hes_)
 {
+  // FIXME: quaternions are not handled so far
   auto start = std::chrono::high_resolution_clock::now();
 
   bool print = false;

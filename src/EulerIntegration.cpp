@@ -23,6 +23,8 @@
 #include "RBDyn/MultiBody.h"
 #include "RBDyn/MultiBodyConfig.h"
 
+#include <iostream>
+
 namespace
 {
 	namespace detail
@@ -193,6 +195,52 @@ void eulerIntegration(const MultiBody& mb, MultiBodyConfig& mbc, double step)
 	for(std::size_t i = 0; i < joints.size(); ++i)
 	{
 		eulerJointIntegration(joints[i].type(), mbc.alpha[i], mbc.alphaD[i], step, mbc.q[i]);
+		for(int j = 0; j < joints[i].dof(); ++j)
+		{
+			mbc.alpha[i][j] += mbc.alphaD[i][j]*step;
+		}
+	}
+}
+
+void eulerIntegrationFixVel(const MultiBody& mb, MultiBodyConfig& mbc, double step, std::vector<std::vector<double> > alphaOld)
+{
+	const std::vector<Joint>& joints = mb.joints();
+
+	// integrate
+  bool trHit = false;
+	// for(std::size_t i = 0; i < joints.size(); ++i)
+  // {
+	// 	for(int j = 0; j < joints[i].dof(); ++j)
+  //   {
+  //     if (mbc.alpha[i][j] == 0.5 || mbc.alpha[i][j] == -0.5)
+  //       trHit = true;
+  //   }
+  // }
+	for(std::size_t i = 0; i < joints.size(); ++i)
+	{
+		eulerJointIntegration(joints[i].type(), mbc.alpha[i], mbc.alphaD[i], step, mbc.q[i]);
+		for(int j = 0; j < joints[i].dof(); ++j)
+		{
+      // std::cout<<"mbc.alpha[i][j] before: "<<mbc.alpha[i][j];
+      // if (mbc.alpha[i][j] != 0.5 && mbc.alpha[i][j] != -0.5)
+      if (!trHit)
+      mbc.alpha[i][j] = 2*mbc.alpha[i][j] - alphaOld[i][j];
+      // std::cout<<" mbc.alpha[i][j] after: "<<mbc.alpha[i][j]<<std::endl;
+			mbc.alpha[i][j] += mbc.alphaD[i][j]*step;
+		}
+	}
+}
+
+void eulerIntegrationFixPos(const MultiBody& mb, MultiBodyConfig& mbc, double step, std::vector<std::vector<double> > alphaOld)
+{
+	const std::vector<Joint>& joints = mb.joints();
+
+	// integrate
+	for(std::size_t i = 0; i < joints.size(); ++i)
+	{
+		eulerJointIntegration(joints[i].type(), mbc.alpha[i], mbc.alphaD[i], step, mbc.q[i]);
+    if (mbc.q[i].size() > 0)
+      mbc.q[i][0] += -0.5 * mbc.alpha[i][0] * step + 0.5 * alphaOld[i][0] * step; // in euler integration, we already did q[i][0] = q[i][0] + step * alpha, so to achieve q[i][0] = q[i][0] + 0.5*step * alpha + 0.5*step * alphaold we need to substract -0.5*step * alpha
 		for(int j = 0; j < joints[i].dof(); ++j)
 		{
 			mbc.alpha[i][j] += mbc.alphaD[i][j]*step;

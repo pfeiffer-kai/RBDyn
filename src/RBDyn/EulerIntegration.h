@@ -49,6 +49,8 @@ RBDYN_DLLAPI void eulerJointIntegration(Joint::Type type, const std::vector<doub
 	* @param step Integration step.
 	*/
 RBDYN_DLLAPI void eulerIntegration(const MultiBody& mb, MultiBodyConfig& mbc, double step);
+RBDYN_DLLAPI void eulerIntegrationFixVel(const MultiBody& mb, MultiBodyConfig& mbc, double step, std::vector<std::vector<double> > oldalpha);
+RBDYN_DLLAPI void eulerIntegrationFixPos(const MultiBody& mb, MultiBodyConfig& mbc, double step, std::vector<std::vector<double> > oldalpha);
 
 /// safe version of @see eulerIntegration.
 RBDYN_DLLAPI void sEulerIntegration(const MultiBody& mb, MultiBodyConfig& mbc, double step);

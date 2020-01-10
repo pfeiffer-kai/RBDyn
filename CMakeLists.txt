@@ -33,7 +33,7 @@ SET(CXX_DISABLE_WERROR True)
 
 SETUP_PROJECT()
 
-option(PYTHON_BINDING "Generate python binding." ON)
+option(PYTHON_BINDING "Generate python binding." OFF)
 option(PYTHON_BINDING_USER_INSTALL "Install the Python bindings in user space" OFF)
 option(DISABLE_TESTS "Disable unit tests." OFF)
 option(BENCHMARKS "Generate benchmarks." OFF)
@@ -64,9 +64,6 @@ if(NOT ${DISABLE_TESTS} OR ${BENCHMARKS})
   add_subdirectory(tests)
 endif()
 
-if(${PYTHON_BINDING})
-  add_subdirectory(binding/python)
-endif()
 
 # Add dependency towards the library in the pkg-config file.
 PKG_CONFIG_APPEND_LIBS(RBDyn)
