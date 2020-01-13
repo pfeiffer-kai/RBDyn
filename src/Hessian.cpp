@@ -177,12 +177,7 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
           }
           else
           {
-            int ul;
-            if (indexChild == indexParent)
-              ul = dof_i+1;
-            else
-              ul = joints[j].dof();
-		        for(int dof_j = 0; dof_j < ul; ++dof_j) // rowwise
+		        for(int dof_j = 0; dof_j < joints[j].dof(); ++dof_j) // rowwise
 		        {
               if (joints[j].type() == Joint::Rev)
               {
