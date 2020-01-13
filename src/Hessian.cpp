@@ -105,7 +105,7 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
   // FIXME: quaternions are not handled so far
   auto start = std::chrono::high_resolution_clock::now();
 
-  bool print = true;
+  bool print = false;
   if (print)
   std::cout<<"hessian"<<std::endl;
   if (print)

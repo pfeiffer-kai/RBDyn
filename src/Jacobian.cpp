@@ -110,8 +110,22 @@ jacobian_(const MultiBody& mb, const MultiBodyConfig& mbc,
 
 		for(int dof = 0; dof < joints[i].dof(); ++dof)
 		{
-			jac.col(curJ + dof).noalias() =
-				(X_i_N*(sva::MotionVecd(mbc.motionSubspace[i].col(dof)))).vector();
+      jac.col(curJ + dof).noalias() =
+        (X_i_N*(sva::MotionVecd(mbc.motionSubspace[i].col(dof)))).vector();
+
+      // Eigen::Vector3d axis = mbc.bodyPosW[i].rotation().transpose() * mbc.motionSubspace[i].col(dof).head(3);
+      // Eigen::Vector3d axisUn = mbc.motionSubspace[i].col(dof).head(3);
+      // std::cout<<"axis: "<<axis.transpose()<<std::endl;
+      // Eigen::Vector3d p = X_0_p.translation() - mbc.bodyPosW[i].translation();
+      // std::cout<<"p: "<<p.transpose()<<std::endl;
+      // Eigen::Vector3d uxp = axis.cross(p);
+      // std::cout<<"uxp: "<<uxp.transpose()<<std::endl;
+      // std::cout<<"jac: "<< (X_i_N*(sva::MotionVecd(mbc.motionSubspace[i].col(dof)))).vector().tail(3).transpose()<<std::endl;
+      // std::cout<<"jac exp: "<<(-X_0_p.translation().cross(axis) - mbc.bodyPosW[i].translation().cross(axisUn)).transpose()<<std::endl;
+      // jac.col(curJ + dof).tail(3).noalias() = uxp;
+
+				// ul(X_i_N*(sva::MotionVecd(mbc.motionSubspace[i].col(dof)))).vector();
+
 		}
 
 		curJ += joints[i].dof();
