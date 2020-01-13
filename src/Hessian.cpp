@@ -150,6 +150,8 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
         {
           for (int dim=0;dim<6;dim++)
             hes_[dim](curParent + dof_i, curParent + dof_i) = 1; //err[0];
+          if (print)
+            std::cout << "free joint: put identity diagonal" << std::endl;
           continue;
         }
 
@@ -175,7 +177,12 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
           }
           else
           {
-		        for(int dof_j = 0; dof_j < joints[j].dof(); ++dof_j) // rowwise
+            int ul;
+            if (indexChild == indexParent)
+              ul = dof_i+1;
+            else
+              ul = joints[j].dof();
+		        for(int dof_j = 0; dof_j < ul; ++dof_j) // rowwise
 		        {
               if (joints[j].type() == Joint::Rev)
               {
@@ -190,7 +197,9 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
                   std::cout << "free joint" << std::endl;
                 if (dof_j > 2)
                 {
-		              curChild += 3; // 3 translational joints
+                  if (print)
+                    std::cout << "free joint: translations dof's, skip" << std::endl;
+		              // curChild += 3; // 3 translational joints
                   break;
                 }
                 else
