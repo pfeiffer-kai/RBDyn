@@ -108,21 +108,27 @@ jacobian_(const MultiBody& mb, const MultiBodyConfig& mbc,
 
 		sva::PTransformd X_i_N = X_0_p*mbc.bodyPosW[i].inv();
 
+    // if (joints[i].type() == Joint::Free)
+    //   std::cout<<"=======Free joint"<<std::endl;
+    // else if (joints[i].type() == Joint::Rev)
+    //   std::cout<<"=======Revolute joint"<<std::endl;
+    // std::cout<<"mbc.motionSubspace[i]:\n"<<mbc.motionSubspace[i]<<std::endl;
 		for(int dof = 0; dof < joints[i].dof(); ++dof)
 		{
       jac.col(curJ + dof).noalias() =
         (X_i_N*(sva::MotionVecd(mbc.motionSubspace[i].col(dof)))).vector();
 
-      // Eigen::Vector3d axis = mbc.bodyPosW[i].rotation().transpose() * mbc.motionSubspace[i].col(dof).head(3);
+      // Eigen::Vector3d axis_0_i = mbc.bodyPosW[i].rotation().transpose() * mbc.motionSubspace[i].col(dof).head(3);
+      // Eigen::Vector3d axisW_0_i = mbc.bodyPosW[i].rotation().transpose() * mbc.motionSubspace[i].col(dof).tail(3);
       // Eigen::Vector3d axisUn = mbc.motionSubspace[i].col(dof).head(3);
-      // std::cout<<"axis: "<<axis.transpose()<<std::endl;
+      // std::cout<<"0_axis_i: "<<axis_0_i.transpose()<<std::endl;
       // Eigen::Vector3d p = X_0_p.translation() - mbc.bodyPosW[i].translation();
       // std::cout<<"p: "<<p.transpose()<<std::endl;
-      // Eigen::Vector3d uxp = axis.cross(p);
-      // std::cout<<"uxp: "<<uxp.transpose()<<std::endl;
+      // Eigen::Vector3d uxp = axis_0_i.cross(p);
+      // std::cout<<"uxp: "<<(uxp + axisW_0_i).transpose()<<std::endl;
       // std::cout<<"jac: "<< (X_i_N*(sva::MotionVecd(mbc.motionSubspace[i].col(dof)))).vector().tail(3).transpose()<<std::endl;
-      // std::cout<<"jac exp: "<<(-X_0_p.translation().cross(axis) - mbc.bodyPosW[i].translation().cross(axisUn)).transpose()<<std::endl;
-      // jac.col(curJ + dof).tail(3).noalias() = uxp;
+      // jac.col(curJ + dof).head(3).noalias() = axis_0_i;
+      // jac.col(curJ + dof).tail(3).noalias() = uxp + axisW_0_i;
 
 				// ul(X_i_N*(sva::MotionVecd(mbc.motionSubspace[i].col(dof)))).vector();
 
@@ -130,6 +136,8 @@ jacobian_(const MultiBody& mb, const MultiBodyConfig& mbc,
 
 		curJ += joints[i].dof();
 	}
+ 
+  // std::cout<<"RBDyn::jac:\n"<<jac<<std::endl;
 
 	return jac;
 }
