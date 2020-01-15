@@ -101,6 +101,7 @@ jacobian_(const MultiBody& mb, const MultiBodyConfig& mbc,
 	int curJ = 0;
 
 	sva::PTransformd X_0_p(Trans_0_p);
+  // std::cout<<"Trans_0_p: "<<X_0_p.translation().transpose()<<std::endl;
 
 	for(std::size_t index = 0; index < jointsPath.size(); ++index)
 	{
@@ -118,6 +119,7 @@ jacobian_(const MultiBody& mb, const MultiBodyConfig& mbc,
       jac.col(curJ + dof).noalias() =
         (X_i_N*(sva::MotionVecd(mbc.motionSubspace[i].col(dof)))).vector();
 
+      // std::cout<<"bodyPos[i]\n"<<mbc.bodyPosW[i].rotation()<<std::endl;
       // Eigen::Vector3d axis_0_i = mbc.bodyPosW[i].rotation().transpose() * mbc.motionSubspace[i].col(dof).head(3);
       // Eigen::Vector3d axisW_0_i = mbc.bodyPosW[i].rotation().transpose() * mbc.motionSubspace[i].col(dof).tail(3);
       // Eigen::Vector3d axisUn = mbc.motionSubspace[i].col(dof).head(3);
