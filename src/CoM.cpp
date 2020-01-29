@@ -352,10 +352,11 @@ void CoMJacobian::weight(const MultiBody& mb, std::vector<double> w)
 const Eigen::MatrixXd& CoMJacobian::jacobian(const MultiBody& mb,
 	const MultiBodyConfig& mbc)
 {
-  // in fact nrJoint jacobians are calculated and added
-  // go through all joints of the robot
-  // go through all bodies that lie on the kinematic chain of that joint, starting from the base
-  // (axis of current joint in world frame) cross (difference between com position of current body and position of body of current joint)
+  // nrBodies jacobians are calculated and added
+  // go through all bodies of the robot
+  // go through all joints that lie on the kinematic chain of that body, starting from the base
+  // (axis of current joint in world frame) cross (difference between com position of current body and  world position of current joint)
+  // here: more computationally efficient to swap the two loops
 	const std::vector<Joint>& joints = mb.joints();
 
 	jac_.setZero();
@@ -389,12 +390,10 @@ const Eigen::MatrixXd& CoMJacobian::jacobian(const MultiBody& mb,
 	return jac_;
 }
 
-/// private implementation of the Hessian computation
-/// We use the Transform template allow Eigen3 to
-/// remove the Matrix3d from the computation.
 const std::vector<Eigen::MatrixXd>&
 CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
 {
+  // nrBodies hessians are calculated and added
   // FIXME: can we reuse the Jacobian as the single entries of each respective body's CoM can not be decoded any more; saving them all in the jacobian calculation takes too much space
 
   auto start = std::chrono::high_resolution_clock::now();
@@ -424,10 +423,6 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
       std::cout<<"i: "<<i<<std::endl;
 
 		subBodies = jointsSubBodies_[i];
-    // std::cout<<"joint i "<<i<<" subBodies: ";
-    // for (int sb = 0;sb<subBodies.size();sb++)
-    //   std::cout<<subBodies[sb]<<" ";
-    // std::cout<<std::endl;
     X_i_0 = mbc.bodyPosW[i].inv();
 
 		int curJ = 0;
@@ -437,18 +432,8 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
         std::cout<<"j: "<<j<<std::endl;
 
 		  subBodiesJ = jointsSubBodies_[j];
-      // std::cout<<"joint j "<<j<<" with "<<joints[j].dof()<<" dof, subBodiesJ: ";
-      // for (int sb = 0;sb<subBodiesJ.size();sb++)
-      //   std::cout<<subBodiesJ[sb]<<" ";
-      // std::cout<<std::endl;
-
-      // if (std::find(subBodiesJ.begin(), subBodiesJ.end(), i) == subBodies.end()){
-      //   continue;
-      // }else{
-		  // sva::PTransformd X_j_com = bodiesCoMWorld_[j]*X_j_0;
 
       R_j_0_T.noalias() = mbc.bodyPosW[j].rotation().transpose();
-
 
       for (int dof_j = 0; dof_j < joints[j].dof(); ++dof_j) // colwise
       {
@@ -466,35 +451,19 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
 
         // joint axis in world frame
         axis.noalias() = R_j_0_T * mbc.motionSubspace[j].col(dof_j).head(3);
-        // axis.noalias() = jac_.col(dof_j).head(3);
-
-        // std::cout<<"start bI in subbodies "<<std::endl;
-		    // for (int bI : subBodies)
-        //   std::cout<<bI<<" ";
-        // std::cout<<std::endl;
 		    for (int bI : subBodies)
 		    {
-          // std::cout<<"bI: "<<bI<<" in ";
-          // for (int sb = 0;sb<subBodiesJ.size();sb++){
-          //   std::cout<<subBodiesJ[sb]<<" ";
-          // }
-          // std::cout<<std::endl;
           bool found = false;
           for (int sb = 0;sb<subBodiesJ.size();sb++){
-            // std::cout<<subBodiesJ[sb]<<" ";
             if (bI == subBodiesJ[sb]){
               subBodiesJ.erase(subBodiesJ.begin(),subBodiesJ.begin()+sb+1);
               found = true;
               break;
             }
           }
-          // std::cout<<std::endl;
-          // if (std::find(subBodiesJ.begin(), subBodiesJ.end(), bI) == subBodiesJ.end()){
           if (!found){
-            // std::cout<<"body "<<bI<<" not on chain J"<<std::endl;
             continue;
           }else{
-            // std::cout<<"body "<<bI<<" on chain J"<<std::endl;
 		    	  X_i_com = bodiesCoMWorld_[bI] * X_i_0;
 		        for(int dof_i = 0; dof_i < joints[i].dof(); ++dof_i) // rowwise
 		        {
