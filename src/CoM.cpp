@@ -412,6 +412,8 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
   sva::PTransformd X_i_0;
   std::vector<int> subBodiesJ;
   std::vector<int> subBodies;
+  Eigen::Matrix3d R_j_0_T;
+
   
 	const std::vector<Joint>& joints = mb.joints();
 
@@ -445,6 +447,9 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
       // }else{
 		  // sva::PTransformd X_j_com = bodiesCoMWorld_[j]*X_j_0;
 
+      R_j_0_T.noalias() = mbc.bodyPosW[j].rotation().transpose();
+
+
       for (int dof_j = 0; dof_j < joints[j].dof(); ++dof_j) // colwise
       {
         if (joints[j].type() == Joint::Prism){
@@ -460,7 +465,8 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
         }
 
         // joint axis in world frame
-        axis.noalias() = jac_.col(dof_j).head(3);
+        axis.noalias() = R_j_0_T * mbc.motionSubspace[j].col(dof_j).head(3);
+        // axis.noalias() = jac_.col(dof_j).head(3);
 
         // std::cout<<"start bI in subbodies "<<std::endl;
 		    // for (int bI : subBodies)
