@@ -22,11 +22,6 @@
 #include "RBDyn/MultiBody.h"
 #include "RBDyn/MultiBodyConfig.h"
 
-#include <chrono>
-#include <ctime>
-
-#include <iostream>
-
 namespace rbd
 {
 
@@ -394,13 +389,13 @@ const std::vector<Eigen::MatrixXd>&
 CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
 {
   // nrBodies hessians are calculated and added
+  // here: go through all joints in a double loop i and j<i
+  // the hessian components 1-3 are then:
+  // axis_0_j x jac_i with jac_i = axis_0_i x (com_0_i - body_0_i)
+  // since we only require jac_i, we only have one subBodies loop (in subBodiesI)
   // FIXME: can we reuse the Jacobian as the single entries of each respective body's CoM can not be decoded any more; saving them all in the jacobian calculation takes too much space
+  // FIXME: quaternions are not handled so far
 
-  auto start = std::chrono::high_resolution_clock::now();
-
-  bool print = false;
-  if (print)
-    std::cout<<"jac:\n"<<jac_<<std::endl;
 	for (size_t dim = 0; dim<3; dim++)
 		hes_[dim] = Eigen::MatrixXd::Zero(jac_.cols(),jac_.cols()); // since we want H and not B = JTJ + sum(H)
 
@@ -409,28 +404,20 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
   Eigen::Vector3d axis;
   sva::PTransformd X_i_com;
   sva::PTransformd X_i_0;
-  std::vector<int> subBodiesJ;
-  std::vector<int> subBodies;
+  std::vector<int> subBodiesI, subBodiesJ;
   Eigen::Matrix3d R_j_0_T;
 
-  
 	const std::vector<Joint>& joints = mb.joints();
 
 	int curI = 0;
 	for (int i = 0; i < mb.nrJoints(); ++i)
 	{
-    if (print)
-      std::cout<<"i: "<<i<<std::endl;
-
-		subBodies = jointsSubBodies_[i];
+		subBodiesI = jointsSubBodies_[i];
     X_i_0 = mbc.bodyPosW[i].inv();
 
 		int curJ = 0;
 		for (int j = 0; j <= i; j++) // inner joints, columnwise
 		{
-      if (print)
-        std::cout<<"j: "<<j<<std::endl;
-
 		  subBodiesJ = jointsSubBodies_[j];
 
       R_j_0_T.noalias() = mbc.bodyPosW[j].rotation().transpose();
@@ -451,10 +438,12 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
 
         // joint axis in world frame
         axis.noalias() = R_j_0_T * mbc.motionSubspace[j].col(dof_j).head(3);
-		    for (int bI : subBodies)
+
+		    for (int bI : subBodiesI) // we only need to go through the subbodies of I since it is only in I that we require the jacobian
 		    {
+          // we need to check whether joint j is on the kinematic chain of subBody i
           bool found = false;
-          for (int sb = 0;sb<subBodiesJ.size();sb++){
+          for (size_t sb = 0;sb<subBodiesJ.size();sb++){
             if (bI == subBodiesJ[sb]){
               subBodiesJ.erase(subBodiesJ.begin(),subBodiesJ.begin()+sb+1);
               found = true;
@@ -474,15 +463,8 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
 
               // FIXME: does this need to be calculated anew?
               jacCol.noalias() = (X_i_com.linearMul(sva::MotionVecd(mbc.motionSubspace[i].col(dof_i))))* bodiesCoeff_[bI];
-              if (print)
-                std::cout<<"jacCol: "<<jacCol.transpose()<<std::endl;
-
               uxJ.noalias() = axis.cross(jacCol);
-              if (print)
-                std::cout<<"uxJ: "<<uxJ.transpose()<<std::endl;
 
-              if (print)
-                std::cout<<"H[ "<<curI + dof_i<<", "<<curJ + dof_j<<" ]"<<std::endl;
 		          for (int dim = 0; dim < 3; dim++)
 		          {
 	 	          	hes_[dim](curI + dof_i, curJ + dof_j) += uxJ[dim];
@@ -497,17 +479,6 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
     }
 		curI += joints[i].dof();
 	}
-
-  auto end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> difference = end - start;
-  // std::cout<<"duration com hessian: "<<difference.count()<<"[s]"<<std::endl;
-
-  if (print){
-    std::cout<<"hes in RBDyn:\n";
-    std::cout<<"H[0] = \n"<<hes_[0]<<std::endl;
-    std::cout<<"H[1] = \n"<<hes_[1]<<std::endl;
-    std::cout<<"H[2] = \n"<<hes_[2]<<std::endl;
-  }
 
 	return hes_;
 }
