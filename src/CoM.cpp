@@ -352,11 +352,15 @@ void CoMJacobian::weight(const MultiBody& mb, std::vector<double> w)
 const Eigen::MatrixXd& CoMJacobian::jacobian(const MultiBody& mb,
 	const MultiBodyConfig& mbc)
 {
+  // in fact nrJoint jacobians are calculated and added
+  // go through all joints of the robot
+  // go through all bodies that lie on the kinematic chain of that joint, starting from the base
+  // (axis of current joint in world frame) cross (difference between com position of current body and position of body of current joint)
 	const std::vector<Joint>& joints = mb.joints();
 
 	jac_.setZero();
 
-	// we pre compute the CoM position of each bodie in world frame
+	// we pre compute the CoM position of each body in world frame
 	for(int i = 0; i < mb.nrBodies(); ++i)
 	{
 		// the transformation must be read {}^0E_p {}^pT_N {}^NX_0
@@ -391,6 +395,7 @@ const Eigen::MatrixXd& CoMJacobian::jacobian(const MultiBody& mb,
 const std::vector<Eigen::MatrixXd>&
 CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
 {
+  // FIXME: can we reuse the Jacobian as the single entries of each respective body's CoM can not be decoded any more; saving them all in the jacobian calculation takes too much space
 
   auto start = std::chrono::high_resolution_clock::now();
 
@@ -405,14 +410,13 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
   Eigen::Vector3d axis;
   sva::PTransformd X_i_com;
   sva::PTransformd X_i_0;
-  Eigen::Matrix3d R_j_0_T;
   std::vector<int> subBodiesJ;
   std::vector<int> subBodies;
   
 	const std::vector<Joint>& joints = mb.joints();
 
 	int curI = 0;
-	for(int i = 0; i < mb.nrJoints(); ++i)
+	for (int i = 0; i < mb.nrJoints(); ++i)
 	{
     if (print)
       std::cout<<"i: "<<i<<std::endl;
@@ -425,7 +429,7 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
     X_i_0 = mbc.bodyPosW[i].inv();
 
 		int curJ = 0;
-		for(std::size_t j = 0; j <= i; j++) // inner joints, columnwise
+		for (int j = 0; j <= i; j++) // inner joints, columnwise
 		{
       if (print)
         std::cout<<"j: "<<j<<std::endl;
@@ -435,9 +439,6 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
       // for (int sb = 0;sb<subBodiesJ.size();sb++)
       //   std::cout<<subBodiesJ[sb]<<" ";
       // std::cout<<std::endl;
-
-		  // sva::PTransformd X_j_0 = mbc.bodyPosW[j].inv();
-      R_j_0_T.noalias() = mbc.bodyPosW[j].rotation().transpose();
 
       // if (std::find(subBodiesJ.begin(), subBodiesJ.end(), i) == subBodies.end()){
       //   continue;
@@ -451,19 +452,15 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
 		        for (int dim = 0; dim < 3; dim++)
 		        {
               if (mbc.motionSubspace[j].col(dof_j).tail(3)(dim) == 1)
-	 	      	    hes_[dim](curI + dof_j, curJ + dof_j) = 1; //* err[dim]; // FIXME: there is a sign switch, where does it come from?
+	 	      	    hes_[dim](curI + dof_j, curJ + dof_j) = 1;
             }
           }else{
             break;
           }
         }
 
-        // axis = X_j_0.rotation() * mbc.motionSubspace[j].col(dof_j).head(3);
-        // axis = X_j_com.rotation() * mbc.motionSubspace[j].col(dof_j).head(3);
-        // axis = X_j_0.rotation() * mbc.motionSubspace[j].col(dof_j).head(3);
-        // axis = bodiesCoMWorld_[bJ].rotation().transpose() * mbc.motionSubspace[j].col(dof_j).head(3);
-        // axis.noalias() = mbc.bodyPosW[j].rotation().transpose() * mbc.motionSubspace[j].col(dof_j).head(3);
-        axis.noalias() = R_j_0_T * mbc.motionSubspace[j].col(dof_j).head(3);
+        // joint axis in world frame
+        axis.noalias() = jac_.col(dof_j).head(3);
 
         // std::cout<<"start bI in subbodies "<<std::endl;
 		    // for (int bI : subBodies)
@@ -500,6 +497,7 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
               if (dof_i > 2) // skip translational joints of root joints //FIXME
                 continue;
 
+              // FIXME: does this need to be calculated anew?
               jacCol.noalias() = (X_i_com.linearMul(sva::MotionVecd(mbc.motionSubspace[i].col(dof_i))))* bodiesCoeff_[bI];
               if (print)
                 std::cout<<"jacCol: "<<jacCol.transpose()<<std::endl;
@@ -512,9 +510,8 @@ CoMJacobian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
                 std::cout<<"H[ "<<curI + dof_i<<", "<<curJ + dof_j<<" ]"<<std::endl;
 		          for (int dim = 0; dim < 3; dim++)
 		          {
-	 	          	hes_[dim](curI + dof_i, curJ + dof_j) += uxJ[dim]; //* err[dim]; // FIXME: there is a sign switch, where does it come from?
-                // if (index_child != index_parent) // FIXME: this should be correct but is not symmetrical
-                if (curI + dof_i != curJ + dof_j) // this is probably wrong
+	 	          	hes_[dim](curI + dof_i, curJ + dof_j) += uxJ[dim];
+                if (curI + dof_i != curJ + dof_j)
 	 	          	  hes_[dim](curJ + dof_j, curI + dof_i) = hes_[dim](curI + dof_i, curJ + dof_j);
               }
             }

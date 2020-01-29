@@ -96,18 +96,17 @@ jacobian_(const MultiBody& mb, const MultiBodyConfig& mbc,
 /// private implementation of the Hessian computation
 /// We use the Transform template allow Eigen3 to
 /// remove the Matrix3d from the computation.
-template<typename Transform>
 static inline const std::vector<Eigen::MatrixXd>&
 hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
-	const Transform& Trans_0_p, const std::vector<int>& jointsPath,
-	const Eigen::MatrixXd& jac, const Eigen::Vector3d& err, std::vector<Eigen::MatrixXd> hes_)
+	const std::vector<int>& jointsPath,
+	const Eigen::MatrixXd& jac, std::vector<Eigen::MatrixXd> hes_)
 {
   /* Hessian computation according to Erleben 2017 */
-  // we go through all dof's in two loops i (parent) and j (child)
+  // we go through all dof's on the kinematic chain in two loops i (parent) and j (child)
   // we take the corresponding joint axis in the base frame 0_u_j = J.col(j).head(3)
   // the geometric jacobian is composed as J = [0_u; 0_u x deltap] = [J_rot; J_lin]
   // the axes in the world frame are thus 0_u = J.head(3)
-  // we calculate the cross product 0_u_j x J.col(i).head(3) and 0_u_j x J.col(i).tail(3)
+  // we calculate the cross product 0_u_j x J.col(i).head(3) and 0_u_j x J.col(i).tail(3) which are the hessian entries 1 to 6
   // FIXME: handling prismatic joints more elegantly like in the jacobian computation
 
   // FIXME: quaternions are not handled so far
@@ -141,104 +140,102 @@ hessian_(const MultiBody& mb, const MultiBodyConfig& mbc,
     if (print)
       std::cout<<"joints[i].type(): "<<joints[i].type()<<" revolute: "<<Joint::Rev<<" prismatic: "<<Joint::Prism<<std::endl;
 
-      for (int dof_i = 0; dof_i < joints[i].dof(); ++dof_i) // colwise
+    for (int dof_i = 0; dof_i < joints[i].dof(); ++dof_i) // colwise
+    {
+      // handle prismatic joints
+      if (joints[i].type() == Joint::Prism || (joints[i].type() == Joint::Free && dof_i > 2))
       {
-        // handle prismatic joints
-        if (joints[i].type() == Joint::Prism || (joints[i].type() == Joint::Free && dof_i > 2))
+        for (int dim=0; dim<6; dim++)
         {
-          for (int dim=0; dim<6; dim++)
-          {
-            hes_[dim].coeffRef(curParent+dof_i,curParent+dof_i) = 1;
-          }
-          continue;
+          hes_[dim].coeffRef(curParent+dof_i,curParent+dof_i) = 1;
         }
-        // revolute joints
-        else
-        {
-          jacCol_w = jac.col(curParent+dof_i).head(3);
-          jacCol = jac.col(curParent+dof_i).tail(3);
+        continue;
+      }
+      // revolute joints
+      else
+      {
+        jacCol_w = jac.col(curParent+dof_i).head(3);
+        jacCol = jac.col(curParent+dof_i).tail(3);
 
-		      int curChild = 0;
-		      for(std::size_t indexChild = 0; indexChild <= indexParent; indexChild++) // inner joints, columnwise
-		      {
-            if (print)
-            {
-              // std::cout<<"indexChild: "<<indexChild<<std::endl;
-              std::cout<<"-------------curChild: "<<curChild<<std::endl;
-            }
+		    int curChild = 0;
+		    for(std::size_t indexChild = 0; indexChild <= indexParent; indexChild++) // inner joints, columnwise
+		    {
+          if (print)
+          {
+            // std::cout<<"indexChild: "<<indexChild<<std::endl;
+            std::cout<<"-------------curChild: "<<curChild<<std::endl;
+          }
 
-		        int j = jointsPath[indexChild];
+		      int j = jointsPath[indexChild];
 
-		          for(int dof_j = 0; dof_j < joints[j].dof(); ++dof_j) // rowwise
-		          {
+		        for(int dof_j = 0; dof_j < joints[j].dof(); ++dof_j) // rowwise
+		        {
 
-                if (joints[j].type() == Joint::Prism || (joints[j].type() == Joint::Free && dof_j > 2))
-                  continue;
+              if (joints[j].type() == Joint::Prism || (joints[j].type() == Joint::Free && dof_j > 2))
+                continue;
+              {
+                if (joints[j].type() == Joint::Free) // FIXME: why is this required while it is not necessary for the Jacobian calculation
                 {
-                  if (joints[j].type() == Joint::Free) // FIXME: why is this required while it is not necessary for the Jacobian calculation
+                  switch (dof_j) // according to xyz-Euler convention of RBDYN
                   {
-                    switch (dof_j) // according to xyz-Euler convention of RBDYN
-                    {
-                      case 0:{
-                        axis = mbc.bodyPosW[j].rotation().transpose() * mbc.motionSubspace[j].col(dof_j).head(3);
-                        break;
-                      }
-                      case 1:{
-                        axis =
-                          mbc.bodyPosW[j].rotation().transpose() * sva::RotX(mbc.q[j][1]) * mbc.motionSubspace[j].col(dof_j).head(3);
-                        break;
-                      }
-                      case 2:{
-                        axis =
-                          mbc.bodyPosW[j].rotation().transpose() * sva::RotX(mbc.q[j][1]) * sva::RotY(mbc.q[j][2]) * mbc.motionSubspace[j].col(dof_j).head(3);
-                        break;
-                      }
+                    case 0:{
+                      axis = mbc.bodyPosW[j].rotation().transpose() * mbc.motionSubspace[j].col(dof_j).head(3);
+                      break;
+                    }
+                    case 1:{
+                      axis =
+                        mbc.bodyPosW[j].rotation().transpose() * sva::RotX(mbc.q[j][1]) * mbc.motionSubspace[j].col(dof_j).head(3);
+                      break;
+                    }
+                    case 2:{
+                      axis =
+                        mbc.bodyPosW[j].rotation().transpose() * sva::RotX(mbc.q[j][1]) * sva::RotY(mbc.q[j][2]) * mbc.motionSubspace[j].col(dof_j).head(3);
+                      break;
                     }
                   }
-                  else
-                  {
-                    axis = jac.col(curChild+dof_j).head(3);
-                  }
+                }
+                else
+                {
+                  axis = jac.col(curChild+dof_j).head(3);
+                }
 
-                  if (print)
-                  {
-                    std::cout<<"untransformed axis: "<<mbc.motionSubspace[j].col(dof_j).head(3).transpose()<<std::endl;
-                    std::cout<<"transformed axis: "<<axis.transpose()<<std::endl;
-                  }
+                if (print)
+                {
+                  std::cout<<"untransformed axis: "<<mbc.motionSubspace[j].col(dof_j).head(3).transpose()<<std::endl;
+                  std::cout<<"transformed axis: "<<axis.transpose()<<std::endl;
+                }
 
-                  uxJ_w = axis.cross(jacCol_w);
-                  uxJ = axis.cross(jacCol); // + mbc.motionSubspace[j].col(dof_j).tail(3).cwiseProduct(mbc.motionSubspace[i].col(dof_i).tail(3));
-                  // std::cout<<"axis "<<mbc.motionSubspace[j].col(dof_j).tail(3).transpose()<<" axis: "<<mbc.motionSubspace[i].col(dof_i).tail(3).transpose()<<": "<<(mbc.motionSubspace[j].col(dof_j).tail(3).cwiseProduct(mbc.motionSubspace[i].col(dof_i).tail(3))).transpose()<<std::endl;
+                uxJ_w = axis.cross(jacCol_w);
+                uxJ = axis.cross(jacCol); // + mbc.motionSubspace[j].col(dof_j).tail(3).cwiseProduct(mbc.motionSubspace[i].col(dof_i).tail(3));
+                // std::cout<<"axis "<<mbc.motionSubspace[j].col(dof_j).tail(3).transpose()<<" axis: "<<mbc.motionSubspace[i].col(dof_i).tail(3).transpose()<<": "<<(mbc.motionSubspace[j].col(dof_j).tail(3).cwiseProduct(mbc.motionSubspace[i].col(dof_i).tail(3))).transpose()<<std::endl;
 
-                  if (print){
-                    std::cout<<"jacCol: "<<jacCol.transpose()<<std::endl;
-                    std::cout<<"uxJ: "<<uxJ.transpose()<<std::endl;
-                    std::cout<<"jacCol_w: "<<jacCol_w.transpose()<<std::endl;
-                    std::cout<<"uxJ_w: "<<uxJ_w.transpose()<<std::endl;
-                  }
+                if (print){
+                  std::cout<<"jacCol: "<<jacCol.transpose()<<std::endl;
+                  std::cout<<"uxJ: "<<uxJ.transpose()<<std::endl;
+                  std::cout<<"jacCol_w: "<<jacCol_w.transpose()<<std::endl;
+                  std::cout<<"uxJ_w: "<<uxJ_w.transpose()<<std::endl;
+                }
 
-                  if (print)
-                    std::cout<<">>>>H[ "<<curParent + dof_i<<", "<<curChild + dof_j<<" ]"<<std::endl;
-		              for (int dim = 0; dim < 3; dim++)
-		              {
-	 	              	hes_[dim](curParent + dof_i, curChild + dof_j) += uxJ_w[dim]; //* err[dim]; // FIXME: there is a sign switch, where does it come from?
-                    // if (index_child != index_parent) // FIXME: this should be correct but is not symmetrical
-                    if (curParent + dof_i != curChild + dof_j) // this is probably wrong
-	 	              	  hes_[dim](curChild + dof_j, curParent + dof_i) = hes_[dim](curParent + dof_i, curChild + dof_j);
-                  }
-                  for (int dim = 3; dim < 6; dim++)
-		              {
-	 	              	hes_[dim](curParent + dof_i, curChild + dof_j) += uxJ[dim-3]; //* err[dim]; // FIXME: there is a sign switch, where does it come from?
-                    // if (index_child != index_parent) // FIXME: this should be correct but is not symmetrical
-                    if (curParent + dof_i != curChild + dof_j) // this is probably wrong
-	 	              	  hes_[dim](curChild + dof_j, curParent + dof_i) = hes_[dim](curParent + dof_i, curChild + dof_j);
-                  }
+                if (print)
+                  std::cout<<">>>>H[ "<<curParent + dof_i<<", "<<curChild + dof_j<<" ]"<<std::endl;
+		            for (int dim = 0; dim < 3; dim++)
+		            {
+	 	            	hes_[dim](curParent + dof_i, curChild + dof_j) += uxJ_w[dim]; // -uxJ if mulitplied directly by error; + because we multiply by w ~ -e
+                  if (curParent + dof_i != curChild + dof_j)
+	 	            	  hes_[dim](curChild + dof_j, curParent + dof_i) = hes_[dim](curParent + dof_i, curChild + dof_j);
+                }
+                for (int dim = 3; dim < 6; dim++)
+		            {
+	 	            	hes_[dim](curParent + dof_i, curChild + dof_j) += uxJ[dim-3]; // -uxJ if mulitplied directly by error; + because we multiply by w ~ -e
+                  if (curParent + dof_i != curChild + dof_j)
+	 	            	  hes_[dim](curChild + dof_j, curParent + dof_i) = hes_[dim](curParent + dof_i, curChild + dof_j);
                 }
               }
-		        curChild += joints[j].dof();
-          }
-		    }
-      }
+            }
+		      curChild += joints[j].dof();
+        }
+		  }
+    }
 		curParent += joints[i].dof();
 	}
 
@@ -268,7 +265,7 @@ Hessian::hessian(const MultiBody& mb, const MultiBodyConfig& mbc)
 	// the transformation must be read {}^0E_p {}^pT_N {}^NX_0
   Eigen::Vector3d T_0_Np((point_ * mbc.bodyPosW[N]).translation());
   jac_ = jacobian_(mb, mbc, T_0_Np, jointsPath_, jac_); /* defined in Jacobian.cpp */
-	hes_ = hessian_(mb, mbc, T_0_Np, jointsPath_, jac_, Eigen::VectorXd::Constant(3,1), hes_); // FIXME: we need r
+	hes_ = hessian_(mb, mbc, jointsPath_, jac_, hes_);
   return hes_;
 }
 
@@ -279,30 +276,30 @@ Hessian::hessian_preCompJ(const MultiBody& mb, const MultiBodyConfig& mbc, const
 
 	// the transformation must be read {}^0E_p {}^pT_N {}^NX_0
   Eigen::Vector3d T_0_Np((point_ * mbc.bodyPosW[N]).translation());
-	hes_ = hessian_(mb, mbc, T_0_Np, jointsPath_, jac, Eigen::VectorXd::Constant(3,1), hes_); // FIXME: we need r
+	hes_ = hessian_(mb, mbc, jointsPath_, jac, hes_);
   return hes_;
 }
 
 const std::vector<Eigen::MatrixXd>&
-Hessian::hessian_complete(const MultiBody& mb, const MultiBodyConfig& mbc, const Eigen::Vector3d& err)
+Hessian::hessian_complete(const MultiBody& mb, const MultiBodyConfig& mbc)
 {
 	int N = jointsPath_.back();
 
 	// the transformation must be read {}^0E_p {}^pT_N {}^NX_0
   Eigen::Vector3d T_0_Np((point_ * mbc.bodyPosW[N]).translation());
   jac_ = jacobian_(mb, mbc, T_0_Np, jointsPath_, jac_); /* defined in Jacobian.cpp */
-	hes_ = hessian_(mb, mbc, T_0_Np, jointsPath_, jac_, err, hes_); // FIXME: we need r
+	hes_ = hessian_(mb, mbc, jointsPath_, jac_, hes_);
   return hes_;
 }
 
 const std::vector<Eigen::MatrixXd>&
-Hessian::hessian_complete_preCompJ(const MultiBody& mb, const MultiBodyConfig& mbc, const Eigen::MatrixXd& jac, const Eigen::Vector3d& err)
+Hessian::hessian_complete_preCompJ(const MultiBody& mb, const MultiBodyConfig& mbc, const Eigen::MatrixXd& jac)
 {
 	int N = jointsPath_.back();
 
 	// the transformation must be read {}^0E_p {}^pT_N {}^NX_0
   Eigen::Vector3d T_0_Np((point_ * mbc.bodyPosW[N]).translation());
-	hes_ = hessian_(mb, mbc, T_0_Np, jointsPath_, jac, err, hes_); // FIXME: we need r
+	hes_ = hessian_(mb, mbc, jointsPath_, jac, hes_);
   return hes_;
 }
 

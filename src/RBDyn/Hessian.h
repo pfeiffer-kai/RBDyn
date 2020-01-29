@@ -66,12 +66,11 @@ public:
 		* @return Returns B of B = JTJ + sum_i e_i H_i with i=1,2,3 of mb with mbc configuration.
 		*/
 	const std::vector<Eigen::MatrixXd>&
-		hessian_complete(const MultiBody& mb, const MultiBodyConfig& mbc,
-			 		  const Eigen::Vector3d& err);
+		hessian_complete(const MultiBody& mb, const MultiBodyConfig& mbc);
   /* with precomputed jacobian */
 	const std::vector<Eigen::MatrixXd>&
 		hessian_complete_preCompJ(const MultiBody& mb, const MultiBodyConfig& mbc,
-			 		  const Eigen::MatrixXd& jac, const Eigen::Vector3d& err);
+			 		  const Eigen::MatrixXd& jac);
 
 	  /**
 		* Project the hessian in the full robot parameters vector.
